@@ -8,9 +8,14 @@
 
 package Racos.Method;
 
+import Racos.Componet.Dimension;
 import Racos.Tools.*;
 
+import java.awt.*;
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.LinkedList;
 
 import Racos.Componet.*;
 import Racos.ObjectiveFunction.*;
@@ -23,12 +28,19 @@ public class Continue extends BaseParameters{
 	private Instance[] NextPop;          //the instance set that algorithm will generate using instance set Pop
 	private Instance[] PosPop;           //the instance set with best objective function value
 	private Instance Optimal;            //an instance with the best objective function value
+	private LinkedList<Instance> savedSamples;		//the size for sample to save
 	private boolean on_off;				 //switch of sequential racos
 	private int BudCount;
 	private Model model;
 	private RandomOperator ro;
-	
-	
+	private double gradient;
+	private int savedSampleSize;
+	boolean isPosPopChanged = false;
+	private int optimalNotChangedTurns = 0;
+	private int maxNotChangedTurns;
+	private int current_Turn;
+
+
 	private class Model{                 //the model of generating next instance
 		
 		public double[][] region;//shrinked region
@@ -217,7 +229,14 @@ public class Continue extends BaseParameters{
 		for(int i=0; i<SampleSize; i++){
 			Pop[i] = temp[i+PositiveNum];
 		}
-		
+
+		savedSamples = new LinkedList<Instance>();
+		for(int i=0;i<savedSampleSize;i++){
+			Instance newSample = RandomInstance();
+			newSample.setValue(task.getValue(newSample));
+			savedSamples.add(newSample);
+		}
+
 		//initialize NextPop
 		NextPop = new Instance[SampleSize];
 		
@@ -429,6 +448,10 @@ public class Continue extends BaseParameters{
 				PosPop[k]=PosPop[k-1];
 			}
 			PosPop[j]=TempIns;
+			isPosPopChanged = true;
+		}
+		else{
+			isPosPopChanged = false;
 		}
 
 		for(j=0; j<this.SampleSize; j++){
@@ -505,29 +528,237 @@ public class Continue extends BaseParameters{
 		}else{
 			// sequential Racos
 			Instance new_sample = null;
-			for(; BudCount<this.Budget; ){	
+			double sampleValues[] = new double[this.Budget];
+			double sampleTrueValues[] = new double[this.Budget];
+			for(; BudCount<this.Budget; ){
 				reSample = true;
-				while (reSample) {		
+				while (reSample) {
 					ResetModel();
 					ChoosenPos = ro.getInteger(0, this.PositiveNum - 1);
 					GlobalSample = ro.getDouble(0, 1);
 					if (GlobalSample >= this.RandProbability) {
 					} else {
 						ShrinkModel(PosPop[ChoosenPos]);//shrinking model
-						setRandomBits();//set uncertain bits						
+						setRandomBits();//set uncertain bits
 					}
 					new_sample = RandomInstance(PosPop[ChoosenPos]);//sample
 					if (notExistInstance(0, new_sample)) {
 						new_sample.setValue(task.getValue(new_sample));//query
+						//reviseInstance(PosPop[ChoosenPos],new_sample);
 						BudCount++;
 						reSample = false;
+						//System.out.println(PosPop[ChoosenPos].getFeature() +": "+PosPop[ChoosenPos].getTrueValue()+ ": "+PosPop[ChoosenPos].getValue());
 					}
 				}
 				UpdateSampleSet(new_sample);//update PosPop set
 				UpdateOptimal();//obtain optimal
-
+				UpdateSavedSamples(new_sample); // update the samples to save
+				checkOptimal();	//check if the optimal is normal
+				sampleValues[BudCount-1] = Optimal.getValue();
+				sampleTrueValues[BudCount-1] = task.getTrueValue(Optimal);
 			}
+			//saveToFile(sampleValues,"sampleValues"+current_Turn+".txt");
+			saveToFile(sampleTrueValues,"sampleTrueValuesRevised"+current_Turn+".txt");
+			//saveToFile(sampleTrueValues,"sampleTrueValues"+current_Turn+".txt");
+			//saveToFile(sampleTrueValues,"sampleTrueValuesOnePos"+current_Turn+".txt");
 		}
 		return ;		
 	}
+
+
+	private void checkOptimal() {
+		if(isPosPopChanged){
+			optimalNotChangedTurns = 0;
+			return;
+		}
+		optimalNotChangedTurns ++;
+		if(optimalNotChangedTurns == maxNotChangedTurns){
+			for(int i=0;i<PositiveNum;i++){
+				PosPop[i].setValue(PosPop[i].getValue()+ 0.05*task.getGaussNoiseSigma());
+			}
+			//System.out.println("changed");
+			for(Instance ins:savedSamples){
+				//UpdatePosPop(ins);
+			}
+			optimalNotChangedTurns = 0;
+		}
+	}
+
+	private void UpdatePosPop(Instance temp) {
+		Instance TempIns = new Instance(dimension);
+		int j;
+		for(j=0; j<this.PositiveNum; j++){
+			if(PosPop[j].getValue()>temp.getValue()){
+				break;
+			}
+		}
+		if(j<this.PositiveNum){
+			TempIns=temp;
+			temp=PosPop[this.PositiveNum-1];
+			for(int k=this.PositiveNum-1; k>j;k--){
+				PosPop[k]=PosPop[k-1];
+			}
+			PosPop[j]=TempIns;
+			isPosPopChanged = true;
+		}
+		else{
+			isPosPopChanged = false;
+		}
+	}
+
+	/**
+	 * save data to file
+	 */
+	private void saveToFile(double[] values, String fileName) {
+		PrintWriter fileOut = null;
+		try {
+			fileOut = new PrintWriter(fileName);
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+		int size = values.length;
+		for(int i=0;i<size;i++){
+			fileOut.println(values[i]);
+		}
+		fileOut.close();
+	}
+
+	/**
+	 * use 500 instances to approximate the gradient
+	 */
+	public void setGradient(){
+		int trainDataSize = 500;
+		Instance[] trainData = new Instance[trainDataSize];
+		for(int i = 0;i < trainDataSize;i++){
+			trainData[i] = RandomInstance();
+			trainData[i].setValue(task.getValue(trainData[i]));
+		}
+		double sumDistance = 0;
+		double sumValueDiff = 0;
+		double sumGradient = 0;
+		int count = 0;
+		double maxGradient = 0;
+		for(int i = 0; i < trainDataSize; i++){
+			for(int j = i+1; j < trainDataSize; j++){
+				//sumDistance  += countDistance(trainData[i], trainData[j]);
+				//sumValueDiff += Math.abs(trainData[i].getValue()-trainData[j].getValue());
+				double disrance = countDistance(trainData[i], trainData[j]);
+				double valueDiff = Math.abs(trainData[i].getValue()-trainData[j].getValue());
+				sumGradient += valueDiff/disrance;
+				if(valueDiff/disrance > maxGradient)
+					maxGradient = valueDiff/disrance;
+				count ++;
+			}
+		}
+		//gradient = sumGradient/(count);
+		gradient = maxGradient;
+		System.out.println(gradient);
+	}
+
+	/**
+	 * count the distance of a and b
+	 * @param a instance a
+	 * @param b instance b
+	 * @return the distance between a and b
+	 */
+	private double countDistance(Instance a, Instance b){
+		int size = dimension.getSize();
+		double sum = 0;
+		for(int i = 0; i < size; i++){
+			sum += Math.pow(Math.abs(a.getFeature(i)-b.getFeature(i)),2);
+		}
+		return Math.sqrt(sum);
+	}
+
+	/**
+	 * adverse newSample according to its parents
+	 * @param parent
+	 * @param child
+	 */
+	void reviseInstance(Instance parent, Instance child){
+		/**
+		 * revise child just according to its parent
+		 */
+		/*double P_value = parent.getValue();
+		double C_value = child.getValue();
+		double expectedDiff = countDistance(parent,child)*gradient;
+		if(expectedDiff + 1*task.getGaussNoiseSigma() < Math.abs(P_value - C_value)){
+			//System.out.println("revised: "+ C_value +"  " +child.getTrueValue() +"  "+P_value +"  " +
+			//		task.getValue(parent) +"  "+(expectedDiff+Instance.getGaussNoiseSigma()));
+			if(C_value < P_value){
+				child.setValue(P_value - expectedDiff);
+			}
+			else{
+				//child.setValue(P_value + expectedDiff);
+			}
+			//System.out.println(child.getValue());
+		}*/
+
+		/**
+		 * part two, use same samples to revise the child
+		 */
+		double sumExpectedValue = 0;
+		double C_value = child.getValue();
+		double originC_Value = C_value;
+		int neighborSize = 100;
+		Instance neighborIns[] = new Instance[neighborSize];
+		for(int i=0;i<neighborSize;i++){
+			ResetModel();
+			double GlobalSample = ro.getDouble(0, 1);
+			if (GlobalSample >= this.RandProbability) {
+			} else {
+				ShrinkModel(child);//shrinking model
+				setRandomBits();//set uncertain bits
+			}
+			neighborIns[i] = RandomInstance(child);
+			neighborIns[i].setValue(task.getValue(neighborIns[i]));
+		}
+ 		for(int i=0;i<neighborSize;i++){
+			/*double sampleValue = neighborIns[i].getValue();
+			double expectedDiff = gradient * countDistance(neighborIns[i], child);
+			if(C_value < sampleValue) {
+				sumExpectedValue += (sampleValue - expectedDiff);
+				//System.out.println(sampleValue - expectedDiff+"   dis:"+countDistance(neighborIns[i],child));
+			}
+			else{
+				sumExpectedValue += (sampleValue + expectedDiff);
+				//System.out.println(sampleValue + expectedDiff+"   dis:"+countDistance(neighborIns[i],child));
+			}*/
+			double sampleValue = neighborIns[i].getValue();
+			if(Math.abs(sampleValue-C_value)>=gradient*countDistance(neighborIns[i],child)){
+				double C_new_value;
+				if(C_value > sampleValue){ //going to make C_value smaller
+					C_new_value = (sampleValue + gradient*countDistance(neighborIns[i],child));
+					C_new_value = Math.max(C_new_value, originC_Value - task.getGaussNoiseSigma());
+				}
+				else{ //going to make C_value larger
+					C_new_value = (sampleValue - gradient*countDistance(neighborIns[i],child));
+					C_new_value = Math.min(C_new_value, originC_Value + task.getGaussNoiseSigma());
+				}
+				child.setValue(C_new_value);
+				C_value = child.getValue();
+			}
+		}
+		//System.out.println(originC_Value+": "+task.getTrueValue(child)+": "+ C_value);
+		/*double expectedValue = sumExpectedValue/neighborSize;
+		System.out.println(expectedValue+": "+C_value+" : "+task.getTrueValue(child));
+		if(Math.abs(expectedValue-C_value) > task.getGaussNoiseSigma()){
+			child.setValue(expectedValue);
+		}*/
+	}
+
+	public void setSavedSampleSize(int savedSampleSizeToset) {
+		savedSampleSize = savedSampleSizeToset;
+		maxNotChangedTurns = savedSampleSizeToset;
+	}
+
+	private void UpdateSavedSamples(Instance new_sample) {
+		savedSamples.removeFirst();
+		savedSamples.add(new_sample);
+	}
+
+	public void setCurrentTurn(int turn){
+		current_Turn = turn;
+	}
+
 }

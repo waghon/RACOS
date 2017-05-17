@@ -24,6 +24,7 @@
 package Racos.ObjectiveFunction;
 
 import java.util.ArrayList;
+import java.util.Random;
 
 import javax.swing.Spring;
 
@@ -41,6 +42,9 @@ public class NormalizedCut implements Task{
 	private int[] c_result;      //category label
 	private String train;
 	private String test;
+	private double gaussNoiseSigma = 0;
+	private Random ro;
+
 	private class EachClass{     //intermediate class, record statistical result
 		public int c_num;        //the instance size according to a certain category
 		public int[] C;          //the sequence of this category
@@ -61,6 +65,7 @@ public class NormalizedCut implements Task{
 		test = tes;
 		ArrayList<String> al = fo.FileReader(train);
 		getData(al);
+		Random ro = new Random();
 	}
 	
 	public void setSigma(double s){
@@ -201,7 +206,7 @@ public class NormalizedCut implements Task{
 	}
 
 	@Override
-	public double getValue(Instance ins) {
+	public double getTrueValue(Instance ins) {
 		// TODO Auto-generated method stub
 		EachClass[] imf_c;
 		double RatioCut = 0;
@@ -217,6 +222,17 @@ public class NormalizedCut implements Task{
 	public Dimension getDim() {
 		// TODO Auto-generated method stub
 		return dim;
+	}
+
+	@Override
+	public double getValue(Instance ins) {
+		double trueValue = getTrueValue(ins);
+		return trueValue+gaussNoiseSigma*ro.nextGaussian();
+	}
+
+	@Override
+	public double getGaussNoiseSigma() {
+		return gaussNoiseSigma;
 	}
 
 }

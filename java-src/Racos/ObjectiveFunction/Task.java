@@ -34,4 +34,9 @@ public interface Task {
 	//for get dimension message for each task
 	public abstract Dimension getDim();
 
+	//get the true value of an instance
+	public double getTrueValue(Instance ins);
+
+	//get the sigma of Gauss noise
+    public double getGaussNoiseSigma();
 }

@@ -27,11 +27,15 @@
 import Racos.Componet.Dimension;
 import Racos.Componet.Instance;
 
+import java.util.Random;
+
 public class Ackley implements Task{
 	
 	private Dimension dim; //dimension
 	private double opt[];  //the center of sphere
-	
+	private double gaussNoiseSigma = 0.01;
+	private Random ro;
+
 	public Ackley(int size){
 		dim = new Dimension();
 		dim.setSize(size);
@@ -40,18 +44,20 @@ public class Ackley implements Task{
 		for(int i=0; i<size; i++){
 			opt[i] = 0.2;
 		}
+		ro = new Random();
 	}
 	
 	public Ackley(double opt[]){
-    dim = new Dimension();
-    dim.setSize(opt.length);
-    dim.setDimension(0, 1, true);
-    this.opt = new double[opt.length];
-    System.arraycopy(opt, 0, this.opt, 0, opt.length);
-  }
+        dim = new Dimension();
+        dim.setSize(opt.length);
+        dim.setDimension(0, 1, true);
+        this.opt = new double[opt.length];
+        System.arraycopy(opt, 0, this.opt, 0, opt.length);
+        ro = new Random();
+    }
 
 	@Override
-	public double getValue(Instance ins) {
+	public double getTrueValue(Instance ins) {
 		// TODO Auto-generated method stub
 		double[] v;
         double squaresum = 0;
@@ -77,5 +83,16 @@ public class Ackley implements Task{
 		// TODO Auto-generated method stub
 		return dim;
 	}
+
+    @Override
+    public double getValue(Instance ins) {
+	    double trueValue = getTrueValue(ins);
+        return trueValue+gaussNoiseSigma*ro.nextGaussian();
+    }
+
+    @Override
+    public double getGaussNoiseSigma() {
+        return gaussNoiseSigma;
+    }
 
 }

@@ -25,9 +25,13 @@ package Racos.ObjectiveFunction;
 
 import Racos.Componet.*;
 
+import java.util.Random;
+
 public class MixedFunction implements Task{
 	private Dimension dim;
-	
+	private double gaussNoiseSigma = 0;
+	private Random ro;
+
 	public MixedFunction(int size){
 		dim = new Dimension();
 		dim.setSize(size);
@@ -39,10 +43,10 @@ public class MixedFunction implements Task{
 				dim.setDimension(i, 0, 100, false);			
 			}
 		}
-		
+		ro = new Random();
 	}
 	
-	public double getValue(Instance ins){
+	public double getTrueValue(Instance ins){
 		double v = 0;
 		int size = ins.getFeature().length;
 		for(int i=0; i<size; i++){
@@ -55,4 +59,14 @@ public class MixedFunction implements Task{
 		return dim;
 	}
 
+	@Override
+	public double getValue(Instance ins) {
+		double trueValue = getTrueValue(ins);
+		return trueValue+gaussNoiseSigma*ro.nextGaussian();
+	}
+
+	@Override
+	public double getGaussNoiseSigma() {
+		return gaussNoiseSigma;
+	}
 }

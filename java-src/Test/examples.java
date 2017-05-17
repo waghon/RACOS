@@ -17,11 +17,12 @@ public class examples {
 		// parameters of Racos
 		int samplesize = 20;       // parameter: the number of samples in each iteration
 		int iteration = 100;       // parameter: the number of iterations for batch racos
-		int budget = 2000;         // parameter: the budget of sampling for sequential racos
-		int positivenum = 1;       // parameter: the number of positive instances in each iteration
+		int budget = 2000000;         // parameter: the budget of sampling for sequential racos
+		int positivenum = 50;       // parameter: the number of positive instances in each iteration
 		double probability = 0.99; // parameter: the probability of sampling from the model
-		int uncertainbit = 1;      // parameter: the number of sampled dimensions 
-		
+		int uncertainbit = 1;      // parameter: the number of sampled dimensions
+		int savedSampleSize = 1000;	// parameter: the number of samples to save
+
 		// example for batch racos in continuous solutions space
 		if (false) {
 			//the default setting of racos is batch
@@ -44,7 +45,8 @@ public class examples {
 		// example for sequential racos in continuous solution space
 		if (true) {
 			Instance ins = null;
-			int repeat = 1;
+			int repeat = 10;
+			double sumOptimal = 0;
 			Task t = new Ackley(100);
 			for (int i = 0; i < repeat; i++) {
 				Continue con = new Continue(t);
@@ -53,11 +55,17 @@ public class examples {
 				con.setBudget(budget);              // parameter: the budget of sampling
 				con.setPositiveNum(positivenum);    // parameter: the number of positive instances in each iteration
 				con.setRandProbability(probability);// parameter: the probability of sampling from the model
-				con.setUncertainBits(uncertainbit); // parameter: the number of samplable dimensions 
+				con.setUncertainBits(uncertainbit); // parameter: the number of samplable dimensions
+				con.setGradient();					// set the gradient base on samples
+				con.setSavedSampleSize(savedSampleSize);	// set the size of sample to save
+				con.setCurrentTurn(i);				// set the current turn of this run
 				con.run();                          // call sequential Racos
 				ins = con.getOptimal();             // obtain optimal
-				System.out.println("best function value:" + ins.getValue());
+				//System.out.println("best function value:" + ins.getValue());
+				System.out.println("best function value:" + t.getTrueValue(ins) +"; with noise "+t.getGaussNoiseSigma() + ": " + ins.getValue());
+				sumOptimal += t.getTrueValue(ins);
 			}
+			System.out.println(sumOptimal/repeat);
 		}
 		
 		// example for optimization in discrete solution space

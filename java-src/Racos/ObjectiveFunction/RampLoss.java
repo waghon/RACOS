@@ -26,6 +26,8 @@ package Racos.ObjectiveFunction;
 
 import Racos.Tools.*;
 import java.util.ArrayList;
+import java.util.Random;
+
 import Racos.Componet.*;
 
 public class RampLoss implements Task{
@@ -36,7 +38,9 @@ public class RampLoss implements Task{
 	private int dim_size;   //dimension size
 	private double[][] L;   //training or testing data, include label
 	private String test;    //test file name
-	
+	private double gaussNoiseSigma = 0;
+	private Random ro;
+
 	/**
 	 * constructor with parameter s and c
 	 * 
@@ -56,6 +60,7 @@ public class RampLoss implements Task{
 		dim.setDimension(-20, 20, true);
 		s = i_s;
 		c = i_c;
+		ro = new Random();
 	}
 	
 	/**
@@ -167,7 +172,7 @@ public class RampLoss implements Task{
 	}
 
 	@Override
-	public double getValue(Instance ins) {
+	public double getTrueValue(Instance ins) {
 		// TODO Auto-generated method stub
 		double dis;
 		double H1=0;
@@ -188,6 +193,17 @@ public class RampLoss implements Task{
 	public Dimension getDim() {
 		// TODO Auto-generated method stub
 		return dim;
+	}
+
+	@Override
+	public double getValue(Instance ins) {
+		double trueValue = getTrueValue(ins);
+		return trueValue+gaussNoiseSigma*ro.nextGaussian();
+	}
+
+	@Override
+	public double getGaussNoiseSigma() {
+		return gaussNoiseSigma;
 	}
 
 }

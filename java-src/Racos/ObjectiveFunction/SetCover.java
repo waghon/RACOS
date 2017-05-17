@@ -27,13 +27,18 @@ package Racos.ObjectiveFunction;
 
 import Racos.Componet.*;
 import Racos.Tools.*;
+
+import java.util.Random;
+
 public class SetCover implements Task{
 	private Dimension dim;
 	private double weight[];
 	private double allWeight;
 	private int sub[][];
 	private int subNum;
-	
+	private double gaussNoiseSigma = 0;
+	private Random ro;
+
 	public SetCover(int dim_size,int subset_size){
 		double temp;
 		subNum = subset_size;
@@ -60,6 +65,7 @@ public class SetCover implements Task{
 		}
 //		showWeight();
 //		showSubSet();
+		ro = new Random();
 	}
 	public void showWeight(){
 		for(int i=0; i<subNum; i++){
@@ -100,7 +106,7 @@ public class SetCover implements Task{
 		}
 		return true;
 	}
-	public double getValue(Instance ins){
+	public double getTrueValue(Instance ins){
 		double v;
 		v = 0;
 		for(int i=0; i<subNum; i++){
@@ -116,6 +122,17 @@ public class SetCover implements Task{
 	public Dimension getDim() {
 		// TODO Auto-generated method stub
 		return this.dim;
+	}
+
+	@Override
+	public double getValue(Instance ins) {
+		double trueValue = getTrueValue(ins);
+		return trueValue+gaussNoiseSigma*ro.nextGaussian();
+	}
+
+	@Override
+	public double getGaussNoiseSigma() {
+		return gaussNoiseSigma;
 	}
 
 }
